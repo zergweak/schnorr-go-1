@@ -14,43 +14,34 @@ P = dG, P就是用户公钥  <br>
 #### 签名
 输入: 数据msg, 私钥d <br>
 计算 P = d*G <br>
-计算 k0 = getK0(msg, d) <br>
-计算 R = k0*G, 其中Rx, Ry为R的坐标 <br>
-计算 k = getK(Ry, k0) <br>
-计算 e = getE(Px, Py, Rx, msg) <br>
+计算 k = getK(msg, d) <br>
+计算 R = k*G <br>
+计算 e = getE(P, R, msg) <br>
 计算 s = (k + e*d) mod N <br>
-输出签名: (Rx,s)
+输出签名: (R,s), 其中R为压缩格式的点 <br>
 
 #### 验签
-输入: 数据msg, 公钥P, 签名(Rx,s) <br>
-计算 e = getE(Px, Py, Rx, msg) <br>
+输入: 数据msg, 公钥P, 签名(R,s) <br>
+计算 e = getE(P, R, msg) <br>
 计算 X = s*G <br>
 计算 Y = e*P <br>
-计算 R' = X - Y = s*G - e*P, 其中Rx', Ry'为R'的坐标 <br>
-如果 Rx' 等于 Rx, 且Ry'是p的二次剩余, 则验证成功 <br>
+计算 R' = X - Y = s*G - e*P <br>
+如果 R' 等于 R, 则验证成功 <br>
 
 #### 公式
-##### getK0(msg, d)
-k0可以是随机数，也可以由 msg和d分散计算. <br>
+##### getK(msg, d)
+k可以是随机数，也可以由 msg和d分散计算. <br>
 本方案中如下： <br>
 计算 P = d*G, 其中Px, Py为P的坐标 <br>
 计算 hmac = hmac512(Px, Py||msg)  <br>
 取 hmac的前32字节, 得到h  <br>
-计算 k0 = (d + h) mod N <br>
+计算 k = (d + h) mod N <br>
 
-##### getK(Ry, k0)
-如果Ry是p的二次剩余, k = k0 <br>
-否则 k = N - k0  <br>
-
-##### getE(Px, Py, Rx, msg)
-e = sha256(Rx||Px||Py||msg)  <br>
+##### getE(P, R, msg)
+e = sha256(R||P||msg) , P和R均为33字节压缩格式 <br>
 
 ##### 证明
 R' = X - Y = s*G - e*P = (k + e*d)*G - e*d*G = k*G  <br>
-R = k0*G        <br>
-由于 k = k0 或者 k = N - k0 <br>
-所以 R' = R 或者 R' = -R <br>
-所以 Rx' = Rx <br>
-由于 Ry是p的二次剩余时, k = k0, 否则 k = N - k0 <br>
-所以 Ry' 总是p的二次剩余 <br>
+R = k*G        <br>
+所以 R'等于R <br>
 
