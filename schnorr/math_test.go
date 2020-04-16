@@ -17,7 +17,7 @@ func TestGetK0(t *testing.T)  {
 	copy(d32[:], d)
 	copy(P33[:], P)
 
-	k0 := GetPrivateK0(d32, message)
+	k0 := GetPrivateK(d32, message)
 	Rx := GetPublicRx(P33, message)
 
 	Rx1, _ := Curve.ScalarBaseMult(k0[:])

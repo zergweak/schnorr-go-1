@@ -6,17 +6,17 @@ import (
 )
 
 // AppendSignature 实现一个聚合签名，可以在一个签名的基础上追加一个签名
-// signInput 是上一个参与者的签名结果，如果本次为第一个，则为空
+// R_in, s_in 是上一个参与者的签名结果，如果本次为第一个，则为空
 // privateKey是私钥，
 // message是签名消息
-// publicKeys 是公钥的集合，按照签名顺序排序
-// index 当前签名的序号，小于index的已经签完
-func AppendSignature(signInput [64]byte, message []byte, privateKey [32]byte, publicKeys [][33]byte, index int) (signOutput [64]byte, err error){
-	k0 := schnorr.GetPrivateK0(privateKey, message)
-	privKey := &schnorr.PrivateKey{D:privateKey, K0:k0}
+// publicSigneds 是已经签名的公钥
+// publicKeys 是公钥的集合
+func AppendSignature(R_in [33]byte, s_in [32]byte, message []byte, privateKey [32]byte, publicSigneds [][33]byte, publicKeys [][33]byte) (R_out [33]byte, s_out [32]byte, err error){
+	k := schnorr.GetPrivateK(privateKey, message)
+	privKey := &schnorr.PrivateKey{D:privateKey, K:k}
 
 	if len(publicKeys) == 0 {
-		return signOutput, errors.New("invalid publicKeys")
+		return R_out, s_out, errors.New("invalid publicKeys")
 	}
 	var pubKeys []*schnorr.PublicKey
 	for _, publicKey := range publicKeys {
@@ -24,15 +24,23 @@ func AppendSignature(signInput [64]byte, message []byte, privateKey [32]byte, pu
 		pubKey := &schnorr.PublicKey{P:publicKey, R:R}
 		pubKeys = append(pubKeys, pubKey)
 	}
-	return schnorr.AppendSignature(signInput, message, privKey, pubKeys, index)
+
+	var pubSigned []*schnorr.PublicKey
+	for _, publicKey := range publicSigneds {
+		R := schnorr.GetPublicR(publicKey, message)
+		pubKey := &schnorr.PublicKey{P:publicKey, R:R}
+		pubSigned = append(pubSigned, pubKey)
+	}
+
+	return schnorr.AppendSignature(R_in, s_in, message, privKey, schnorr.AggregationPublicKey(pubSigned), schnorr.AggregationPublicKey(pubKeys))
 }
 
-func Sign(message []byte, privateKey [32]byte, publicKeys [][33]byte) (signOutput [64]byte, err error){
-	k0 := schnorr.GetPrivateK0(privateKey, message)
-	privKey := &schnorr.PrivateKey{D:privateKey, K0:k0}
+func Sign(message []byte, privateKey [32]byte, publicKeys [][33]byte) (R [33]byte, s [32]byte, err error){
+	k0 := schnorr.GetPrivateK(privateKey, message)
+	privKey := &schnorr.PrivateKey{D:privateKey, K:k0}
 
 	if len(publicKeys) == 0 {
-		return signOutput, errors.New("invalid publicKeys")
+		return R, s, errors.New("invalid publicKeys")
 	}
 	var pubKeys []*schnorr.PublicKey
 	for _, publicKey := range publicKeys {
@@ -40,23 +48,25 @@ func Sign(message []byte, privateKey [32]byte, publicKeys [][33]byte) (signOutpu
 		pubKey := &schnorr.PublicKey{P:publicKey, R:R}
 		pubKeys = append(pubKeys, pubKey)
 	}
-	Rix, _, s, err := schnorr.Sign(message, privKey, pubKeys)
+	Rx, Ry, s_, err := schnorr.Sign(message, privKey, schnorr.AggregationPublicKey(pubKeys))
 	if err != nil {
-		return signOutput, err
+		return R, s, err
 	}
-	copy(signOutput[:32], schnorr.IntToByte(Rix))
-	copy(signOutput[32:], schnorr.IntToByte(s))
-	return signOutput, nil
+
+	R_ := schnorr.Marshal(schnorr.Curve, Rx, Ry)
+	copy(R[:], R_)
+	copy(s[:], schnorr.IntToByte(s_))
+	return R, s, nil
 }
 
 //Verify
-func Verify(publicKey [33]byte, message []byte, signature [64]byte) (bool, error) {
-	return schnorr.Verify(publicKey, message, signature)
+func Verify(publicKey [33]byte, message []byte, R [33]byte, s [32]byte) (bool, error) {
+	return schnorr.Verify(publicKey, message, R, s)
 }
 
 //MultiVerify
-func MultiVerify(publicKey [][33]byte, message []byte, signature [64]byte) (bool, error) {
-	return schnorr.MultiVerify(publicKey, message, signature)
+func MultiVerify(publicKey [][33]byte, message []byte, R [33]byte, s [32]byte) (bool, error) {
+	return schnorr.MultiVerify(publicKey, message, R, s)
 }
 
 //VerifySignInput 验证签名的中间过程
@@ -64,7 +74,7 @@ func MultiVerify(publicKey [][33]byte, message []byte, signature [64]byte) (bool
 //publicKeys	所有参与签名的公钥
 //message		签名消息
 //signInput		签名中间结果
-func VerifySignInput(publicKeysSigned [][33]byte, publicKeys [][33]byte, message []byte, signInput [64]byte) (bool, error) {
+func VerifySignInput(publicKeysSigned [][33]byte, publicKeys [][33]byte, message []byte, R [33]byte, s [32]byte) (bool, error) {
 	if len(publicKeysSigned) == 0 {
 		return true, nil //没有签过
 	}
@@ -91,5 +101,5 @@ func VerifySignInput(publicKeysSigned [][33]byte, publicKeys [][33]byte, message
 		pubKeys = append(pubKeys, pubKey)
 	}
 
-	return schnorr.VerifySignInput(signedPubKeys, pubKeys, message, signInput)
+	return schnorr.VerifySignInput(schnorr.AggregationPublicKey(signedPubKeys), schnorr.AggregationPublicKey(pubKeys), message, R, s)
 }

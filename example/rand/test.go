@@ -25,28 +25,37 @@ func main()  {
 	var err error
 	var ret bool
 	s := big.NewInt(0)
+	R_x, R_y := schnorr.Zero, schnorr.Zero
 	for i, privateKey := range privateKeys  {
-		signI, err := multisign.Sign(message, privateKey, publicKeys)
+		R_i, s_i, err := multisign.Sign(message, privateKey, publicKeys)
 		if err != nil {
 			panic(err)
 		}
-		ret, err = multisign.VerifySignInput(publicKeys[i:i+1], publicKeys, message, signI)
+		ret, err = multisign.VerifySignInput(publicKeys[i:i+1], publicKeys, message, R_i, s_i)
 		if err != nil {
 			panic(err)
 		}
 		if !ret {
 			panic("验证签名失败")
 		}
-		s = new(big.Int).Add(new(big.Int).SetBytes(signI[32:]), s)
+		s = new(big.Int).Add(new(big.Int).SetBytes(s_i[:]), s)
 		s = s.Mod(s, schnorr.Curve.N)
+
+		Rx_i, Ry_i := schnorr.Unmarshal(schnorr.Curve, R_i[:])
+		R_x, R_y = schnorr.Curve.Add(R_x, R_y, Rx_i, Ry_i)
+	}
+	if Rx.Cmp(R_x) != 0 || Ry.Cmp(R_y) != 0 {
+		panic("签名结果错误")
 	}
 
-	var sign [64]byte
-	copy(sign[:32], schnorr.IntToByte(Rx))
-	copy(sign[32:], schnorr.IntToByte(s))
+	R_ := schnorr.Marshal(schnorr.Curve, R_x, R_y)
+	var R33 [33]byte
+	var s32 [32]byte
+	copy(R33[:], R_)
+	copy(s32[:], schnorr.IntToByte(s))
 
 	//所有人都签名完了，验证签名
-	ret, err = multisign.MultiVerify(publicKeys, message, sign)
+	ret, err = multisign.MultiVerify(publicKeys, message, R33, s32)
 	if err != nil {
 		panic(err)
 	}

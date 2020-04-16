@@ -18,22 +18,23 @@ func main()  {
 
 	// 开始每个用户依次签名，注意每个用户可以拿到所有人的私钥，但是只持有自己的私钥
 	message := []byte("test msg")
-	var sign [64]byte
+	var R [33]byte
+	var s [32]byte
 	var err error
 	var ret bool
 	for i, privateKey := range privateKeys  {
-		ret, err = multisign.VerifySignInput(publicKeys[:i], publicKeys, message, sign)
+		ret, err = multisign.VerifySignInput(publicKeys[:i], publicKeys, message, R, s)
 		if err != nil {
 			panic(err)
 		}
 		if !ret {
 			panic("验证前置签名失败")
 		}
-		sign, err = multisign.AppendSignature(sign, message, privateKey, publicKeys, i)
+		R, s, err = multisign.AppendSignature(R, s, message, privateKey, publicKeys[:i], publicKeys)
 		if err != nil {
 			panic(err)
 		}
-		ret, err = multisign.VerifySignInput(publicKeys[:i+1], publicKeys, message, sign)
+		ret, err = multisign.VerifySignInput(publicKeys[:i+1], publicKeys, message, R, s)
 		if err != nil {
 			panic(err)
 		}
@@ -43,7 +44,7 @@ func main()  {
 	}
 
 	//所有人都签名完了，验证签名
-	ret, err = multisign.MultiVerify(publicKeys, message, sign)
+	ret, err = multisign.MultiVerify(publicKeys, message, R, s)
 	if err != nil {
 		panic(err)
 	}

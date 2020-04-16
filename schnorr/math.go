@@ -13,22 +13,15 @@ func IntToByte(i *big.Int) []byte {
 	return b1[:]
 }
 
-func getE(Px, Py *big.Int, rX []byte, m []byte) *big.Int {
-	r := append(rX, Marshal(Curve, Px, Py)...)
+func getE(P [33]byte, R [33]byte, m []byte) *big.Int {
+	r := append(R[:], R[:]...)
 	r = append(r, m[:]...)
 	h := sha256.Sum256(r)
 	i := new(big.Int).SetBytes(h[:])
 	return i.Mod(i, Curve.N)
 }
 
-func getK(Ry, k0 *big.Int) *big.Int {
-	if big.Jacobi(Ry, Curve.P) == 1 {
-		return k0
-	}
-	return k0.Sub(Curve.N, k0)
-}
-
-func aggregationPublicKey(publicKeys []*PublicKey) *PublicKey {
+func AggregationPublicKey(publicKeys []*PublicKey) *PublicKey {
 	if(len(publicKeys) == 0) {
 		return nil
 	}
@@ -93,7 +86,7 @@ func GetPublicR(P [33]byte, message []byte) [33]byte {
 }
 
 //用d计算k0
-func GetPrivateK0(d [32]byte, message []byte) [32]byte {
+func GetPrivateK(d [32]byte, message []byte) [32]byte {
 	Px, Py := Curve.ScalarBaseMult(d[:])
 	ilNum := computChildOffset(IntToByte(Px), IntToByte(Py), message)
 
